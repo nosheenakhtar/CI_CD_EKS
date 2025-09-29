@@ -1,0 +1,25 @@
+resources:
+  - ../../base
+namePrefix: prod-
+patches:
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+images:
+  - name: REPLACE_ME_ECR/backend
+    newName: REPLACE_ME_ECR/backend
+    newTag: $IMAGE_TAG
+  - name: REPLACE_ME_ECR/frontend
+    newName: REPLACE_ME_ECR/frontend
+    newTag: $IMAGE_TAG

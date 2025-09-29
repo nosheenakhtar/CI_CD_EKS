@@ -1,0 +1,15 @@
+resources:
+  - namespace.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - ingress.yaml
+namespace: app
+images:
+  - name: REPLACE_ME_ECR/backend
+    newName: REPLACE_ME_ECR/backend
+    newTag: latest
+  - name: REPLACE_ME_ECR/frontend
+    newName: REPLACE_ME_ECR/frontend
+    newTag: latest

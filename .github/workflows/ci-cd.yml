@@ -1,0 +1,94 @@
+name: CI-CD EKS
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  EKS_CLUSTER: ${{ vars.EKS_CLUSTER }}
+  ECR_REPO: ${{ vars.ECR_REPO }}
+  IMAGE_TAG: ${{ github.sha }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/GitHubActionsECRDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repo if missing
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPO/backend" || aws ecr create-repository --repository-name "$ECR_REPO/backend"
+          aws ecr describe-repositories --repository-names "$ECR_REPO/frontend" || aws ecr create-repository --repository-name "$ECR_REPO/frontend"
+
+      - name: Build & push backend
+        run: |
+          docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/backend:$IMAGE_TAG ./services/backend
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/backend:$IMAGE_TAG
+
+      - name: Build & push frontend
+        run: |
+          docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/frontend:$IMAGE_TAG ./services/frontend
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/frontend:$IMAGE_TAG
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+
+      - name: Deploy to STAGING (kustomize)
+        run: |
+          export IMAGE_TAG=${{ env.IMAGE_TAG }}
+          export REPLACE_ME_ECR="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+          # Replace image placeholders in base
+          sed -i "s|REPLACE_ME_ECR|$REPLACE_ME_ECR|g" k8s/base/*.yaml
+          kubectl create ns app --dry-run=client -o yaml | kubectl apply -f - || true
+          kubectl apply -k k8s/overlays/staging
+
+  deploy-production:
+    needs: build-and-deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/GitHubActionsECRDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+
+      - name: Deploy to PRODUCTION (kustomize)
+        run: |
+          export IMAGE_TAG=${{ github.sha }}
+          export REPLACE_ME_ECR="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+          sed -i "s|REPLACE_ME_ECR|$REPLACE_ME_ECR|g" k8s/base/*.yaml
+          kubectl create ns app --dry-run=client -o yaml | kubectl apply -f - || true
+          kubectl apply -k k8s/overlays/production

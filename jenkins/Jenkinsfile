@@ -1,0 +1,55 @@
+pipeline {
+  agent any
+  environment {
+    AWS_REGION = credentials('AWS_REGION')
+    AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
+    EKS_CLUSTER = credentials('EKS_CLUSTER')
+    ECR_REPO = credentials('ECR_REPO')
+    IMAGE_TAG = "${env.GIT_COMMIT}"
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Build Images') {
+      steps {
+        sh '''
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+        aws ecr describe-repositories --repository-names "$ECR_REPO/backend" || aws ecr create-repository --repository-name "$ECR_REPO/backend"
+        aws ecr describe-repositories --repository-names "$ECR_REPO/frontend" || aws ecr create-repository --repository-name "$ECR_REPO/frontend"
+
+        docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/backend:$IMAGE_TAG services/backend
+        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/backend:$IMAGE_TAG
+
+        docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/frontend:$IMAGE_TAG services/frontend
+        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO/frontend:$IMAGE_TAG
+        '''
+      }
+    }
+    stage('Deploy Staging') {
+      steps {
+        sh '''
+        aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+        export REPLACE_ME_ECR="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+        sed -i "s|REPLACE_ME_ECR|$REPLACE_ME_ECR|g" k8s/base/*.yaml
+        IMAGE_TAG=$IMAGE_TAG kubectl apply -k k8s/overlays/staging
+        '''
+      }
+    }
+    stage('Approve Production?') {
+      steps {
+        input message: 'Deploy to production?', ok: 'Deploy'
+      }
+    }
+    stage('Deploy Production') {
+      steps {
+        sh '''
+        aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+        export REPLACE_ME_ECR="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+        sed -i "s|REPLACE_ME_ECR|$REPLACE_ME_ECR|g" k8s/base/*.yaml
+        IMAGE_TAG=$IMAGE_TAG kubectl apply -k k8s/overlays/production
+        '''
+      }
+    }
+  }
+}
