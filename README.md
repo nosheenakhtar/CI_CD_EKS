@@ -87,7 +87,7 @@ node server.js
 
 ---
 
-## 🔐 IAM Notes (high level)
+##  IAM Notes (high level)
 
 - Actions workflow uses **OIDC** to assume a role allowing:
   - `ecr:*` (push/pull)
@@ -97,7 +97,7 @@ node server.js
 
 ---
 
-## 🧹 Clean Up
+##  Clean Up
 
 - Delete ECR images / repos (optional)
 - Uninstall Helm releases: `helm uninstall monitoring -n monitoring`
