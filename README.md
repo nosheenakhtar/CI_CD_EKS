@@ -2,11 +2,11 @@
 
 End‑to‑end demo showing how I design and implement a **GitHub Actions (or Jenkins) CI/CD pipeline** for a **microservices** app deployed to **Amazon EKS** with Docker, Kubernetes, and basic monitoring (Prometheus + Grafana).
 
-> ✅ Swap AWS for Azure/DigitalOcean easily—scripts and manifests are cloud‑agnostic except for ECR and EKS bits.
+>  Swap AWS for Azure/DigitalOcean easily—scripts and manifests are cloud‑agnostic except for ECR and EKS bits.
 
 ---
 
-## 🧱 Architecture Overview
+##  Architecture Overview
 
 - Two services: `frontend` (Node/Express) and `backend` (Python/Flask + Prometheus metrics)
 - Docker images pushed to **Amazon ECR**
@@ -24,7 +24,7 @@ Developer → GitHub → GitHub Actions → Build+Test → Push to ECR → kubec
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 0) Prerequisites
 - An existing **EKS** cluster and kubectl configured
@@ -70,27 +70,6 @@ kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
 
 ---
 
-## 📁 Repository Layout
-
-```
-.
-├─ services/
-│  ├─ backend/           # Flask API + /metrics
-│  └─ frontend/          # Express app calling backend
-├─ k8s/
-│  ├─ base/              # Kustomize base (Deployments, Services, Ingress)
-│  └─ overlays/
-│     ├─ staging/
-│     └─ production/
-├─ .github/workflows/    # GitHub Actions pipeline
-├─ jenkins/              # Jenkinsfile (optional alternative)
-├─ monitoring/           # ServiceMonitor & notes
-├─ scripts/              # helpers for ECR/EKS login, kubeconfig, etc.
-└─ assets/               # drop screenshots/GIFs here
-```
-
----
-
 ## 🧪 Testing Locally
 
 ```bash
@@ -115,16 +94,6 @@ node server.js
   - `eks:DescribeCluster`
   - `sts:AssumeRole`
 - The workflow sets kubeconfig using cluster’s `certificateAuthority` and `endpoint` via `aws eks update-kubeconfig`.
-
----
-
-## 📊 What clients see
-
-- CI logs showing lint/test/build steps
-- Artifacts (images) in ECR
-- Staging URL responding within minutes after push
-- Prometheus metrics and Grafana dashboard
-- Manual approval and promotion to production
 
 ---
 
